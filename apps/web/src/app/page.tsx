@@ -128,7 +128,9 @@ function HomeContent() {
   const [agents, setAgents] = useState<LeaderboardAgent[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [tokens, setTokens] = useState<Token[]>([]);
+  const [allAgents, setAllAgents] = useState<LeaderboardAgent[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(true);
+  const [loadingAgents, setLoadingAgents] = useState(true);
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [loadingTokens, setLoadingTokens] = useState(true);
   const [booted, setBooted] = useState(false);
@@ -153,8 +155,11 @@ function HomeContent() {
     if (isDemo) {
       // Load mock data with a small delay for realism
       setTimeout(() => {
-        setAgents(generateMockAgents());
+        const mock = generateMockAgents();
+        setAgents(mock);
+        setAllAgents(mock);
         setLoadingLeaderboard(false);
+        setLoadingAgents(false);
       }, 800);
       setTimeout(() => {
         setPosts(generateMockPosts());
@@ -166,6 +171,7 @@ function HomeContent() {
       }, 1000);
     } else {
       fetchLeaderboard();
+      fetchAllAgents();
       fetchFeed();
       fetchTokens();
     }
@@ -180,6 +186,31 @@ function HomeContent() {
       // Silent fail for dashboard
     } finally {
       setLoadingLeaderboard(false);
+    }
+  };
+
+  const fetchAllAgents = async () => {
+    try {
+      setLoadingAgents(true);
+      const response = await apiClient.getAgents({ limit: 50 });
+      const agentsData = (response.data.agents || []).map((a, i) => ({
+        rank: i + 1,
+        agent: {
+          id: a.id,
+          username: a.username,
+          displayName: a.displayName,
+          avatarUrl: a.avatarUrl,
+        },
+        totalProfitUsd: a.totalProfitUsd,
+        totalVolumeUsd: a.totalVolumeUsd,
+        winRate: a.winRate,
+        totalTrades: a.totalTrades,
+      }));
+      setAllAgents(agentsData);
+    } catch {
+      // Silent fail
+    } finally {
+      setLoadingAgents(false);
     }
   };
 
@@ -467,18 +498,18 @@ function HomeContent() {
           title="AGENT_WORLD.exe"
           icon=">>"
           className="flex-1 min-h-[250px]"
-          statusBar={<span>Agents are trading on Base chain</span>}
+          statusBar={<span>{allAgents.length} agents registered on Base chain</span>}
           scrollable
         >
-          {loadingLeaderboard ? (
+          {loadingAgents ? (
             <RetroLoading message="LOADING AGENTS" variant="dots" />
-          ) : agents.length === 0 ? (
+          ) : allAgents.length === 0 ? (
             <div className="flex items-center justify-center h-full text-terminal-dim font-mono text-sm">
               NO AGENTS ONLINE
             </div>
           ) : (
             <div className="grid grid-cols-2 xl:grid-cols-3 gap-4 p-2">
-              {agents.slice(0, 6).map((entry) => (
+              {allAgents.slice(0, 9).map((entry) => (
                 <AgentCharacter
                   key={entry.agent.id}
                   agent={entry.agent}

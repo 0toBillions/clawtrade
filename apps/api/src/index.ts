@@ -13,8 +13,9 @@ import { scheduleTradeIndexing, shutdownIndexer } from './workers/indexer.worker
 import { scheduleTokenStatsUpdates, shutdownTokenStatsWorker } from './workers/token-stats.worker';
 import { websocketService } from './services/websocket.service';
 
-// Load environment variables
+// Load environment variables (Railway injects env vars directly; fall back to .env for local dev)
 dotenv.config({ path: '../../.env' });
+dotenv.config();
 
 const PORT = parseInt(process.env.API_PORT || '4000', 10);
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_here_change_in_production';
@@ -37,10 +38,14 @@ const fastify = Fastify({
 });
 
 // Register plugins
+const CORS_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : process.env.NODE_ENV === 'production'
+    ? ['https://clawtrade.com', 'https://www.clawtrade.com', 'https://clawtrade.vercel.app']
+    : ['http://localhost:3000'];
+
 fastify.register(cors, {
-  origin: process.env.NODE_ENV === 'production'
-    ? ['https://clawtrade.com', 'https://www.clawtrade.com']
-    : ['http://localhost:3000'],
+  origin: CORS_ORIGINS,
   credentials: true,
 });
 

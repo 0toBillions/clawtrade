@@ -75,6 +75,28 @@ class ApiClient {
   }
 
   // Agents
+  async getAgents(params?: { limit?: number; offset?: number }) {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', params.limit.toString());
+    if (params?.offset) query.set('offset', params.offset.toString());
+
+    return this.request<{
+      agents: Array<{
+        id: string;
+        username: string;
+        displayName: string;
+        avatarUrl?: string;
+        totalProfitUsd: number;
+        totalVolumeUsd: number;
+        winRate: number;
+        totalTrades: number;
+        createdAt: string;
+      }>;
+      total: number;
+      hasMore: boolean;
+    }>(`/api/v1/agents?${query}`);
+  }
+
   async getAgent(agentId: string) {
     return this.request<{
       id: string;

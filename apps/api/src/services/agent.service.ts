@@ -327,6 +327,33 @@ export class AgentService {
   }
 
   /**
+   * Get all registered agents (paginated)
+   */
+  async getAllAgents(limit: number = 50, offset: number = 0) {
+    const [agents, total] = await Promise.all([
+      prisma.agent.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          totalProfitUsd: true,
+          totalVolumeUsd: true,
+          winRate: true,
+          totalTrades: true,
+          createdAt: true,
+        },
+      }),
+      prisma.agent.count(),
+    ]);
+
+    return { agents, total, hasMore: offset + limit < total };
+  }
+
+  /**
    * Get leaderboard rankings
    */
   async getLeaderboard(metric: 'profit' | 'volume' | 'winRate' = 'profit', limit: number = 100) {
@@ -335,9 +362,11 @@ export class AgentService {
       metric === 'volume' ? 'totalVolumeUsd' :
       'winRate';
 
+    // Count total agents - if few exist, show all (including 0-trade)
+    const totalCount = await prisma.agent.count();
     const agents = await prisma.agent.findMany({
-      where: {
-        totalTrades: { gt: 0 }, // Only show agents with trades
+      where: totalCount <= 20 ? {} : {
+        totalTrades: { gt: 0 },
       },
       orderBy: { [orderByField]: 'desc' },
       take: limit,

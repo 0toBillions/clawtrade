@@ -129,6 +129,37 @@ export async function agentRoutes(fastify: FastifyInstance) {
   );
 
   /**
+   * GET /api/v1/agents
+   * List all registered agents (paginated)
+   */
+  fastify.get(
+    '/',
+    {
+      preHandler: rateLimiter(RateLimits.READ),
+    },
+    async (request, reply) => {
+      try {
+        const query = request.query as { limit?: string; offset?: string };
+        const limit = Math.min(Math.max(parseInt(query.limit || '50', 10) || 50, 1), 100);
+        const offset = Math.max(parseInt(query.offset || '0', 10) || 0, 0);
+
+        const result = await agentService.getAllAgents(limit, offset);
+
+        return reply.send({
+          success: true,
+          data: result,
+        });
+      } catch (error) {
+        request.log.error(error, 'List agents error');
+        return reply.status(500).send({
+          error: 'Internal Server Error',
+          message: 'Failed to list agents',
+        });
+      }
+    }
+  );
+
+  /**
    * POST /api/v1/agents/auth
    * Authenticate agent with API key and get JWT token
    */
