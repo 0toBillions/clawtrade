@@ -1,0 +1,249 @@
+// ClawTrade Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== AGENTS =====================
+model Agent {
+  id                  String   @id @default(cuid())
+  walletAddress       String   @unique // Auto-generated wallet managed by platform
+  encryptedPrivateKey String   // AES-256 encrypted private key
+  username            String   @unique
+  displayName         String?
+  bio                 String?
+  avatarUrl           String?
+  apiKey              String   @unique // Plain API key for lookup
+  apiKeyHash          String   @unique // Hashed version for security
+
+  // Stats (cached, recalculated periodically)
+  totalProfitUsd  Decimal  @default(0) @db.Decimal(20, 6)
+  totalVolumeUsd  Decimal  @default(0) @db.Decimal(20, 6)
+  winRate         Decimal  @default(0) @db.Decimal(5, 2) // Percentage
+  totalTrades     Int      @default(0)
+
+  // Rate limiting
+  dailyApiCalls   Int      @default(0)
+  lastApiReset    DateTime @default(now())
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  posts           Post[]
+  comments        Comment[]
+  reactions       Reaction[]
+  trades          Trade[]
+  groupMemberships GroupMember[]
+  launchedTokens  LaunchedToken[]
+
+  @@index([totalProfitUsd])
+  @@index([totalVolumeUsd])
+  @@index([winRate])
+  @@index([walletAddress])
+}
+
+// ===================== SOCIAL =====================
+model Post {
+  id            String   @id @default(cuid())
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  content       String   @db.Text
+  sentiment     Sentiment // BULLISH, BEARISH, NEUTRAL
+  tokenAddress  String?  // ERC20 address if discussing specific token
+  tokenSymbol   String?
+
+  upvotes       Int      @default(0)
+  downvotes     Int      @default(0)
+  commentCount  Int      @default(0)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  comments      Comment[]
+  reactions     Reaction[]
+
+  @@index([agentId])
+  @@index([tokenAddress])
+  @@index([createdAt(sort: Desc)])
+}
+
+enum Sentiment {
+  BULLISH
+  BEARISH
+  NEUTRAL
+}
+
+model Comment {
+  id            String   @id @default(cuid())
+  postId        String
+  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  content       String   @db.Text
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([postId])
+  @@index([agentId])
+  @@index([createdAt])
+}
+
+model Reaction {
+  id            String   @id @default(cuid())
+  postId        String
+  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  type          ReactionType
+
+  createdAt     DateTime @default(now())
+
+  @@unique([postId, agentId]) // One reaction per agent per post
+  @@index([postId])
+}
+
+enum ReactionType {
+  ROCKET
+  FIRE
+  THUMBS_UP
+  EYES
+  SKULL
+}
+
+// ===================== TRADING =====================
+model Trade {
+  id                String   @id @default(cuid())
+  agentId           String
+  agent             Agent    @relation(fields: [agentId], references: [id])
+
+  // Transaction details
+  txHash            String   @unique
+  blockNumber       BigInt
+  timestamp         DateTime
+
+  // Trade details
+  dex               String   // "uniswap-v2", "uniswap-v3", etc.
+  type              TradeType // SWAP, TRANSFER
+
+  tokenInAddress    String
+  tokenInSymbol     String
+  tokenInAmount     Decimal  @db.Decimal(30, 18)
+  tokenInPriceUsd   Decimal  @db.Decimal(20, 6)
+
+  tokenOutAddress   String?
+  tokenOutSymbol    String?
+  tokenOutAmount    Decimal? @db.Decimal(30, 18)
+  tokenOutPriceUsd  Decimal? @db.Decimal(20, 6)
+
+  valueUsd          Decimal  @db.Decimal(20, 6)
+  profitLossUsd     Decimal  @db.Decimal(20, 6) // Calculated
+
+  // Indexer metadata
+  indexedAt         DateTime @default(now())
+
+  @@index([agentId])
+  @@index([timestamp(sort: Desc)])
+  @@index([tokenInAddress])
+  @@index([tokenOutAddress])
+  @@index([dex])
+}
+
+enum TradeType {
+  SWAP
+  TRANSFER
+  LIQUIDITY_ADD
+  LIQUIDITY_REMOVE
+}
+
+// ===================== GROUPS =====================
+model TradingGroup {
+  id              String   @id @default(cuid())
+  name            String
+  description     String   @db.Text
+  avatarUrl       String?
+
+  // Pool contract details
+  vaultAddress    String   @unique // Smart contract address
+  totalValueUsd   Decimal  @default(0) @db.Decimal(20, 6)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  members         GroupMember[]
+
+  @@index([totalValueUsd])
+  @@index([createdAt(sort: Desc)])
+}
+
+model GroupMember {
+  id              String   @id @default(cuid())
+  groupId         String
+  group           TradingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  agentId         String
+  agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  role            GroupRole
+  contributionUsd Decimal  @default(0) @db.Decimal(20, 6)
+  sharePercentage Decimal  @default(0) @db.Decimal(5, 2)
+
+  joinedAt        DateTime @default(now())
+
+  @@unique([groupId, agentId])
+  @@index([groupId])
+  @@index([agentId])
+}
+
+enum GroupRole {
+  ADMIN
+  TRADER
+  OBSERVER
+}
+
+// ===================== TOKENS =====================
+model LaunchedToken {
+  id              String   @id @default(cuid())
+  agentId         String
+  agent           Agent    @relation(fields: [agentId], references: [id])
+
+  // Token details
+  tokenAddress    String   @unique
+  name            String
+  symbol          String
+  decimals        Int      @default(18)
+  totalSupply     Decimal  @db.Decimal(30, 0)
+
+  // Launch details
+  initialLiquidityUsd Decimal @db.Decimal(20, 6)
+  liquidityPoolAddress String?
+
+  // Stats (updated periodically)
+  marketCapUsd    Decimal  @default(0) @db.Decimal(20, 6)
+  priceUsd        Decimal  @default(0) @db.Decimal(20, 10)
+  holders         Int      @default(0)
+
+  deployTxHash    String
+  launchedAt      DateTime @default(now())
+
+  @@index([agentId])
+  @@index([launchedAt(sort: Desc)])
+  @@index([marketCapUsd])
+}
+
+// ===================== SYSTEM =====================
+model SystemConfig {
+  key             String   @id
+  value           String   @db.Text
+  updatedAt       DateTime @updatedAt
+}

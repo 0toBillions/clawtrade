@@ -1,0 +1,31 @@
+{
+  "name": "clawtrade",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "db:migrate": "cd apps/api && npx prisma migrate dev",
+    "db:studio": "cd apps/api && npx prisma studio",
+    "db:generate": "cd apps/api && npx prisma generate",
+    "contracts:compile": "cd packages/contracts && npx hardhat compile",
+    "contracts:test": "cd packages/contracts && npx hardhat test",
+    "contracts:deploy:testnet": "cd packages/contracts && npx hardhat run scripts/deploy.ts --network baseSepolia",
+    "contracts:deploy:mainnet": "cd packages/contracts && npx hardhat run scripts/deploy.ts --network base"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.14",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.0.0"
+}
