@@ -45,7 +45,7 @@ const CORS_ORIGINS = process.env.CORS_ORIGINS
     : ['http://localhost:3000'];
 
 fastify.register(cors, {
-  origin: CORS_ORIGINS,
+  origin: true, // Allow all origins (tunnel URL changes each session)
   credentials: true,
 });
 

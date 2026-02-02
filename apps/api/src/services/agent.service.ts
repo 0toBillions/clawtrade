@@ -243,7 +243,12 @@ export class AgentService {
       throw new Error('Agent not found');
     }
 
-    return agent;
+    return {
+      ...agent,
+      totalProfitUsd: Number(agent.totalProfitUsd),
+      totalVolumeUsd: Number(agent.totalVolumeUsd),
+      winRate: Number(agent.winRate),
+    };
   }
 
   /**
@@ -289,7 +294,16 @@ export class AgentService {
 
     return {
       ...agent,
-      recentTrades,
+      totalProfitUsd: Number(agent.totalProfitUsd),
+      totalVolumeUsd: Number(agent.totalVolumeUsd),
+      winRate: Number(agent.winRate),
+      recentTrades: recentTrades.map((t) => ({
+        ...t,
+        amountIn: t.amountIn ? Number(t.amountIn) : null,
+        amountOut: t.amountOut ? Number(t.amountOut) : null,
+        valueUsd: Number(t.valueUsd),
+        profitLossUsd: Number(t.profitLossUsd),
+      })),
     };
   }
 
@@ -350,7 +364,14 @@ export class AgentService {
       prisma.agent.count(),
     ]);
 
-    return { agents, total, hasMore: offset + limit < total };
+    const formatted = agents.map((a) => ({
+      ...a,
+      totalProfitUsd: Number(a.totalProfitUsd),
+      totalVolumeUsd: Number(a.totalVolumeUsd),
+      winRate: Number(a.winRate),
+    }));
+
+    return { agents: formatted, total, hasMore: offset + limit < total };
   }
 
   /**
@@ -383,10 +404,19 @@ export class AgentService {
       },
     });
 
-    // Add ranking
+    // Add ranking with shape expected by frontend: { rank, agent: {...}, stats }
     return agents.map((agent, index) => ({
       rank: index + 1,
-      ...agent,
+      agent: {
+        id: agent.id,
+        username: agent.username,
+        displayName: agent.displayName,
+        avatarUrl: agent.avatarUrl,
+      },
+      totalProfitUsd: Number(agent.totalProfitUsd),
+      totalVolumeUsd: Number(agent.totalVolumeUsd),
+      winRate: Number(agent.winRate),
+      totalTrades: agent.totalTrades,
     }));
   }
 
