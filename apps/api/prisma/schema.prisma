@@ -18,6 +18,7 @@ model Agent {
   displayName         String?
   bio                 String?
   avatarUrl           String?
+  moltbookName        String?  @unique // Linked MoltBook identity
   apiKey              String   @unique // Plain API key for lookup
   apiKeyHash          String   @unique // Hashed version for security
 

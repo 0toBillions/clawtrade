@@ -10,6 +10,10 @@ interface RegisterAgentInput {
   avatarUrl?: string;
 }
 
+interface RegisterFromMoltbookInput {
+  moltbookName: string;
+}
+
 interface AuthAgentInput {
   apiKey: string;
 }
@@ -75,6 +79,103 @@ export class AgentService {
     return {
       agent,
       apiKey, // Return API key only once during registration
+    };
+  }
+
+  /**
+   * Register an agent from MoltBook — fetches their MoltBook profile,
+   * creates a ClawTrade account with an auto-generated wallet.
+   */
+  async registerFromMoltbook(input: RegisterFromMoltbookInput) {
+    const { moltbookName } = input;
+
+    // Check if this MoltBook name is already linked
+    const existingLink = await prisma.agent.findUnique({
+      where: { moltbookName },
+    });
+    if (existingLink) {
+      throw new Error('This MoltBook account is already registered on ClawTrade');
+    }
+
+    // Fetch the agent's profile from MoltBook to verify they exist
+    let moltbookProfile: { name: string; description?: string; avatar_url?: string; karma?: number } | null = null;
+    try {
+      const response = await fetch(
+        `https://www.moltbook.com/api/v1/agents/profile?name=${encodeURIComponent(moltbookName)}`
+      );
+      if (!response.ok) {
+        throw new Error(`MoltBook returned ${response.status}`);
+      }
+      const data = (await response.json()) as Record<string, any>;
+      moltbookProfile = data.agent || data.data || data;
+    } catch (err) {
+      throw new Error(`Could not verify MoltBook agent "${moltbookName}". Make sure the name is correct and the account exists on moltbook.com.`);
+    }
+
+    // Derive a ClawTrade username from the MoltBook name
+    // MoltBook names may have characters not valid for ClawTrade usernames
+    let username = moltbookName
+      .replace(/[^a-zA-Z0-9_]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .toLowerCase()
+      .slice(0, 20);
+
+    if (username.length < 3) {
+      username = `mb_${username}`.slice(0, 20);
+    }
+
+    // Handle username collision by appending a suffix
+    let finalUsername = username;
+    let attempt = 0;
+    while (await prisma.agent.findUnique({ where: { username: finalUsername } })) {
+      attempt++;
+      const suffix = `_${attempt}`;
+      finalUsername = `${username.slice(0, 20 - suffix.length)}${suffix}`;
+    }
+
+    // Generate wallet and API key
+    const wallet = generateWallet();
+    const apiKey = this.generateApiKey();
+    const apiKeyHash = await bcrypt.hash(apiKey, 12);
+
+    const displayName = moltbookProfile?.name || moltbookName;
+    const bio = moltbookProfile?.description || `Migrated from MoltBook (@${moltbookName})`;
+    const avatarUrl = moltbookProfile?.avatar_url || `https://api.dicebear.com/7.x/identicon/svg?seed=${wallet.address}`;
+
+    const agent = await prisma.agent.create({
+      data: {
+        walletAddress: wallet.address.toLowerCase(),
+        encryptedPrivateKey: wallet.encryptedPrivateKey,
+        username: finalUsername,
+        displayName,
+        bio,
+        avatarUrl,
+        moltbookName,
+        apiKey,
+        apiKeyHash,
+        totalProfitUsd: 0,
+        totalVolumeUsd: 0,
+        winRate: 0,
+        totalTrades: 0,
+        dailyApiCalls: 0,
+        lastApiReset: new Date(),
+      },
+      select: {
+        id: true,
+        walletAddress: true,
+        username: true,
+        displayName: true,
+        bio: true,
+        avatarUrl: true,
+        moltbookName: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      agent,
+      apiKey,
     };
   }
 

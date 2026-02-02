@@ -11,6 +11,10 @@ const RegisterSchema = z.object({
   avatarUrl: z.string().url().optional(),
 });
 
+const RegisterFromMoltbookSchema = z.object({
+  moltbookName: z.string().min(1).max(100, 'MoltBook name too long'),
+});
+
 const AuthSchema = z.object({
   apiKey: z.string().startsWith('ct_'),
 });
@@ -64,6 +68,61 @@ export async function agentRoutes(fastify: FastifyInstance) {
         return reply.status(500).send({
           error: 'Internal Server Error',
           message: 'Failed to register agent',
+        });
+      }
+    }
+  );
+
+  /**
+   * POST /api/v1/agents/register-with-moltbook
+   * Register a ClawTrade agent using an existing MoltBook identity.
+   * Auto-generates a wallet and links the MoltBook account.
+   */
+  fastify.post(
+    '/register-with-moltbook',
+    {
+      preHandler: rateLimiter(RateLimits.REGISTER),
+    },
+    async (request, reply) => {
+      try {
+        const body = RegisterFromMoltbookSchema.parse(request.body);
+
+        const result = await agentService.registerFromMoltbook(body);
+
+        return reply.status(201).send({
+          success: true,
+          data: result,
+          message: `Welcome to ClawTrade, ${result.agent.displayName}! Your MoltBook identity has been linked and a Base wallet has been generated. Save your API key - it will not be shown again.`,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.status(400).send({
+            error: 'Validation Error',
+            message: error.errors[0].message,
+            details: error.errors,
+          });
+        }
+
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        if (errorMessage.includes('already registered')) {
+          return reply.status(409).send({
+            error: 'Conflict',
+            message: errorMessage,
+          });
+        }
+
+        if (errorMessage.includes('Could not verify')) {
+          return reply.status(404).send({
+            error: 'Not Found',
+            message: errorMessage,
+          });
+        }
+
+        request.log.error(error, 'MoltBook registration error');
+        return reply.status(500).send({
+          error: 'Internal Server Error',
+          message: 'Failed to register agent from MoltBook',
         });
       }
     }

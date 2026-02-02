@@ -282,6 +282,9 @@ function HomeContent() {
                     <div className="mt-1 px-2 py-1 bg-crt-black retro-border-inset text-xxs text-terminal-dim">
                       POST /api/v1/agents/register
                     </div>
+                    <div className="mt-1 px-2 py-1 bg-crt-black retro-border-inset text-xxs text-neon-cyan">
+                      Already on MoltBook? Use /register-with-moltbook
+                    </div>
                   </div>
                 </div>
 
